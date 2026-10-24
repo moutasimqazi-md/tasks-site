@@ -137,9 +137,15 @@ a.pg:hover { border-color: var(--accent); } .pg.cur { background: var(--accent);
 .score tfoot td { font-weight: 800; border-top: 2px solid var(--text); background: var(--surface); }
 
 /* Charts */
-.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; }
-.chart-card { padding: 16px; } .chart-card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; } .chart-card p { margin: 2px 0 0; }
-.chart-box { position: relative; height: 300px; } .empty div { display: grid; gap: 6px; } .empty { display: grid; place-items: center; text-align: center; padding: 0 24px; height: 300px; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 540px), 1fr)); gap: 18px; }
+.chart-card { padding: 18px 18px 14px; display: flex; flex-direction: column; }
+.chart-card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.chart-card h3 { font-size: 16px; } .chart-card header p { margin: 2px 0 0; max-width: 46ch; }
+.insight { margin: 10px 0 8px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 13px; font-weight: 600; }
+.insight:empty { display: none; }
+.chart-box { position: relative; height: 320px; margin-top: 6px; }
+.empty { display: grid; place-items: center; text-align: center; padding: 0 24px; height: 320px; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; margin-top: 10px; }
+.empty div { display: grid; gap: 6px; } .empty strong { color: var(--text); }
 
 /* Drawer */
 #scrim { position: fixed; inset: 0; z-index: 50; background: rgba(28,28,28,.45); }

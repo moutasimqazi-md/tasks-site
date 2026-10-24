@@ -8,12 +8,12 @@ $f = load_filters();
 $top = db_all("SELECT t.* FROM tasks t WHERE $tw AND t.is_done = 0 ORDER BY t.total_added DESC, t.task_key LIMIT 10", $tp);
 
 $charts = [
-    ['weekly_days', 'Working days added per BA per week', 'Last 12 weeks (or the selected range if longer). Weeks start on Monday, IST.'],
-    ['pct_ext', '% of tasks extended per BA', 'Dashed line = team average.'],
-    ['avg_slip', 'Average slip per extended task', 'Working days.'],
-    ['padding', 'Padding ratio per BA', 'Dashed line = 1.0× (plan window equals estimate).'],
-    ['weekly_deleted', 'Tickets deleted per BA per week', ''],
-    ['by_type', 'Inflation events by type per BA', ''],
+    ['weekly_days', 'Working days added per week', 'Each line is a BA. Weeks start on Monday (IST).'],
+    ['pct_ext', 'Tasks extended', 'Share of each BA\'s tasks whose deadline has moved. Dashed line = team average.'],
+    ['avg_slip', 'Average slip per extended task', 'How many working days a moved task loses on average.'],
+    ['padding', 'Plan padding', 'Plan window ÷ estimate. 1.0× = no padding.'],
+    ['weekly_deleted', 'Tickets deleted per week', ''],
+    ['by_type', 'What kind of inflation', 'Inflation events by type, per BA.'],
 ];
 
 render_header('BA graphs', 'graphs', $f, 'Who inflates timelines, who gets tickets deleted, and how padded the plans are.');

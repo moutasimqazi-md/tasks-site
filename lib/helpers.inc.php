@@ -173,7 +173,7 @@ function ba_directory(): array
         'akruti.patel@moveneticsdigital.com'    => 'Akruti Patel',
         'asad.dongri@moveneticsdigital.com'     => 'Asad Dongri',
         'binson.abraham@moveneticsdigital.com'  => 'Binson Abraham',
-        'moutasim.qazi@moveneticsdigital.com'   => 'Umama Qazi',
+        'umama.qazi@moveneticsdigital.com'      => 'Umama Qazi',   // n8n writes this address for AI Division B
         'sapna.kaintu@moveneticsdigital.com'    => 'Sapna Kaintu',
     ];
     $rows = db_all("SELECT ba_email, MAX(ba_name) AS ba_name FROM tasks WHERE ba_email IS NOT NULL AND ba_email <> '' GROUP BY ba_email

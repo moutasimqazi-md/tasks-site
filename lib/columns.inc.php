@@ -3,6 +3,21 @@ declare(strict_types=1);
 
 const PER_PAGE = 50;
 
+function fmt_event_when(array $r): string
+{
+    $utc = (string)($r['ev_at'] ?? $r['detected_at']);
+    $baseline = ($r['event_type'] ?? '') === 'ALREADY_EXTENDED' && empty($r['changed_at']);
+    return $baseline ? fmt_ist($utc, 'j M Y') : fmt_ist($utc);
+}
+
+function when_cell(array $r): string
+{
+    $baseline = ($r['event_type'] ?? '') === 'ALREADY_EXTENDED' && empty($r['changed_at']);
+    $t = $baseline ? 'Pre-tracking: original deadline that was already extended when tracking began. Detected by n8n on ' . fmt_ist($r['detected_at']) . ' IST.'
+                   : 'Happened ' . fmt_ist((string)($r['ev_at'] ?? $r['detected_at'])) . ' IST. Detected by n8n ' . fmt_ist($r['detected_at']) . ' IST.';
+    return '<span title="' . e($t) . '">' . e(fmt_event_when($r)) . '</span>';
+}
+
 function td_task(array $r): string
 {
     $t = (string)($r['title'] ?? '');
@@ -39,8 +54,9 @@ function event_columns(string $page): array
 {
     $tipTask = 'Renaming a sheet ticket looks like a deletion plus a new ticket.';
     $common = [
-        'detected' => ['label' => 'Detected (IST)', 'sort' => 'e.detected_at', 'class' => 'nowrap',
-            'html' => fn($r) => e(fmt_ist($r['detected_at'])), 'csv' => fn($r) => fmt_ist($r['detected_at'])],
+        'detected' => ['label' => 'Date (IST)', 'sort' => 'ev_at', 'class' => 'nowrap',
+            'tip' => 'The date the inflation happened. Pre-tracking rows show the original deadline that was extended (the real change date was before tracking began).',
+            'html' => 'when_cell', 'csv' => fn($r) => fmt_event_when($r)],
         'project'  => ['label' => 'Project', 'sort' => 'e.project',
             'html' => fn($r) => e($r['project'] ?? ''), 'csv' => fn($r) => (string)$r['project']],
         'board'    => ['label' => 'Board', 'sort' => 'e.board',
@@ -51,9 +67,9 @@ function event_columns(string $page): array
             'html' => fn($r) => e($r['assignee'] ?? ''), 'csv' => fn($r) => (string)$r['assignee']],
         'ba'       => ['label' => 'BA', 'sort' => 'COALESCE(NULLIF(e.ba_name, \'\'), e.ba_email)', 'class' => 'nowrap',
             'html' => 'ba_cell', 'csv' => fn($r) => ba_label($r['ba_email'], $r['ba_name'])],
-        'moved'    => ['label' => 'Times moved', 'sort' => 'e.times_moved', 'class' => 'num',
+        'moved'    => ['extra' => true, 'label' => 'Times moved', 'sort' => 'e.times_moved', 'class' => 'num',
             'html' => fn($r) => e((string)($r['times_moved'] ?? '')), 'csv' => fn($r) => (string)$r['times_moved']],
-        'total'    => ['label' => 'Total slip', 'sort' => 'e.total_added', 'class' => 'num',
+        'total'    => ['extra' => true, 'label' => 'Total slip', 'sort' => 'e.total_added', 'class' => 'num',
             'html' => fn($r) => e((string)($r['total_added'] ?? '')), 'csv' => fn($r) => (string)$r['total_added']],
         'comments' => ['label' => 'Comments', 'sort' => 'ccnt', 'class' => 'num',
             'html' => fn($r) => '<span class="ccnt" data-comment-count="' . (int)$r['id'] . '">' . (int)$r['ccnt'] . '</span>',
@@ -73,7 +89,7 @@ function event_columns(string $page): array
                 'html' => fn($r) => yes_badge($r, 'After deadline'), 'csv' => fn($r) => ((int)$r['after_deadline'] === 1 ? 'Yes' : 'No')],
             'reason' => ['label' => 'Reason', 'sort' => 'e.reason', 'class' => 'wide',
                 'html' => 'reason_cell', 'csv' => fn($r) => trim((string)$r['reason'])],
-            'changed_by' => ['label' => 'Changed by', 'sort' => 'e.changed_by',
+            'changed_by' => ['extra' => true, 'label' => 'Changed by', 'sort' => 'e.changed_by',
                 'tip' => 'Notion tickets only, and only "probably": it is the last editor of the page. Sheet tickets show —.',
                 'html' => fn($r) => ($r['changed_by'] ?? '') !== '' ? e($r['changed_by']) : '<span class="muted">—</span>',
                 'csv' => fn($r) => ($r['changed_by'] ?? '') !== '' ? (string)$r['changed_by'] : '—'],
@@ -95,6 +111,12 @@ function event_columns(string $page): array
         ];
     }
     $defs = $common + $extra;
+    if ($page === 'deletions') {
+        $defs['detected']['label'] = 'Deleted (IST)';
+        $defs['detected']['tip'] = 'When n8n noticed the ticket was gone.';
+    } else {
+        $defs['detected']['label'] = 'Inflation date (IST)';
+    }
     $ordered = [];
     foreach ($keys as $k) $ordered[$k] = $defs[$k];
     $ordered['link'] = $defs['link'];
@@ -126,7 +148,7 @@ function events_sql(array $f, string $page, string $orderExpr, string $dir, ?int
     $extra = $page === 'deletions'
         ? ", EXISTS(SELECT 1 FROM events r WHERE r.task_key = e.task_key AND r.event_type = 'TASK_RESTORED' AND r.detected_at > e.detected_at) AS restored"
         : '';
-    $sql = "SELECT e.*, (SELECT COUNT(*) FROM comments c WHERE c.event_id = e.id) AS ccnt$extra
+    $sql = "SELECT e.*, (" . event_date_expr('e') . ") AS ev_at, (SELECT COUNT(*) FROM comments c WHERE c.event_id = e.id) AS ccnt$extra
             FROM events e WHERE $w ORDER BY $orderExpr $dir, e.id $dir";
     if ($limit !== null) {
         $sql .= ' LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset;
@@ -198,4 +220,10 @@ function render_pagination(int $total, int $page, int $per = PER_PAGE): void
     }
     echo $link(min($pages, $page + 1), 'Next ›', false, $page >= $pages);
     echo '</span></nav>';
+}
+
+/** Columns shown in the on-screen table (extras and csv-only columns stay in the CSV and the drawer). */
+function table_keys(array $defs): array
+{
+    return array_keys(array_filter($defs, fn($d) => empty($d['csv_only']) && empty($d['extra'])));
 }

@@ -13,9 +13,12 @@ function render_header(string $title, string $active, ?array $f = null, string $
     $sync = db_val('SELECT MAX(run_at) FROM runs');
     $stale = true;
     if ($sync) {
-        $workday = (new DateTimeImmutable('now', tz_ist()))->format('N') !== '7';
+        // Red only while a run should have happened: Mon-Sat, 09:30-22:00 IST, and nothing for 3 hours.
+        $nowIst = new DateTimeImmutable('now', tz_ist());
+        $minutes = (int)$nowIst->format('G') * 60 + (int)$nowIst->format('i');
+        $inWindow = $nowIst->format('N') !== '7' && $minutes >= 9 * 60 + 30 && $minutes <= 22 * 60;
         $age = time() - (new DateTimeImmutable((string)$sync, tz_utc()))->getTimestamp();
-        $stale = $workday && $age > 3 * 3600;
+        $stale = $inWindow && $age > 3 * 3600;
     }
     $syncTxt = $sync ? fmt_ist((string)$sync, 'j M Y, H:i') . ' IST' : 'never';
     $qs = $f ? '?' . http_build_query($f['_qs']) : '';
@@ -110,7 +113,6 @@ function render_filter_bar(array $f, array $opts = []): void
       <option value="notion"<?= $f['source'] === 'notion' ? ' selected' : '' ?>>Source: Notion</option>
     </select>
     <input class="search" type="search" name="q" value="<?= e($f['q']) ?>" placeholder="Search title or assignee…" maxlength="100" aria-label="Search">
-    <label class="chk"><input type="checkbox" name="pre" value="1"<?= $f['pre'] ? ' checked' : '' ?>> Include pre-tracking<?= info('ALREADY_EXTENDED rows are a one-time baseline recorded on the first n8n run (deadlines that were already extended before tracking began). They are hidden from statistics by default.') ?></label>
     <?php if (!empty($opts['restores'])): ?>
     <label class="chk"><input type="checkbox" name="restores" value="1"<?= $f['restores'] ? ' checked' : '' ?>> Show restores</label>
     <?php endif; ?>
@@ -144,10 +146,6 @@ function render_empty_hint(array $f, string $scope = 'all'): void
         $msgs[] = 'n8n has not written any events yet. Events appear when a task date is pushed later or a ticket is deleted.';
     } else {
         $real = $scope === 'deletion' ? (int)$all['del'] : ($scope === 'inflation' ? (int)$all['infl'] : (int)$all['infl'] + (int)$all['del']);
-        if ($inRangeNoPre === 0 && $inRange > 0) {
-            $msgs[] = '<strong>' . number_format($inRange) . ' pre-tracking baseline rows</strong> exist in this period but are hidden by default. '
-                . '<a href="' . e(self_url(['pre' => '1', 'page' => null])) . '">Show them</a>.';
-        }
         if ($real === 0) {
             $msgs[] = 'No <strong>' . ($scope === 'deletion' ? 'deletions' : ($scope === 'inflation' ? 'new date inflations' : 'inflations or deletions')) . '</strong> have been recorded since tracking began'
                 . ' — n8n has logged ' . number_format((int)$all['pre']) . ' baseline rows from its first run (' . fmt_ist($all['mn'], 'j M Y') . '), nothing since. That is good news: no deadline has moved and no ticket was deleted.';
@@ -174,6 +172,7 @@ function render_chart_card(string $id, string $title, string $sub = ''): void
   <section class="card chart-card" data-chart="<?= e($id) ?>">
     <header><div><h3><?= e($title) ?></h3><?php if ($sub !== ''): ?><p class="muted small"><?= e($sub) ?></p><?php endif; ?></div>
       <button type="button" class="btn small" data-png="<?= e($id) ?>">⬇ PNG</button></header>
+    <p class="insight" data-role="insight"></p>
     <div class="chart-box"><canvas id="c-<?= e($id) ?>" aria-label="<?= e($title) ?>" role="img"></canvas></div>
     <div class="empty" hidden><div><strong>No data in this range</strong><span class="muted small" data-role="why"></span></div></div>
   </section>

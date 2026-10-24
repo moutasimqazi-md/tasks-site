@@ -17,12 +17,12 @@ $kpis = [
 ];
 
 [$w, $p] = events_where($f, 'inflation');
-$worst = db_all("SELECT e.*, (SELECT COUNT(*) FROM comments c WHERE c.event_id = e.id) AS ccnt FROM events e
-                 WHERE $w AND e.days_added > 0 ORDER BY e.days_added DESC, e.detected_at DESC LIMIT 10", $p);
+$worst = db_all("SELECT e.*, (" . event_date_expr('e') . ") AS ev_at, (SELECT COUNT(*) FROM comments c WHERE c.event_id = e.id) AS ccnt FROM events e
+                 WHERE $w AND e.days_added > 0 ORDER BY e.days_added DESC, ev_at DESC LIMIT 10", $p);
 $f2 = $f; $f2['restores'] = false;
 [$w, $p] = events_where($f2, 'deletion');
-$dels = db_all("SELECT e.*, (SELECT COUNT(*) FROM comments c WHERE c.event_id = e.id) AS ccnt FROM events e
-                WHERE $w ORDER BY e.detected_at DESC, e.id DESC LIMIT 10", $p);
+$dels = db_all("SELECT e.*, (" . event_date_expr('e') . ") AS ev_at, (SELECT COUNT(*) FROM comments c WHERE c.event_id = e.id) AS ccnt FROM events e
+                WHERE $w ORDER BY ev_at DESC, e.id DESC LIMIT 10", $p);
 
 [$tw, $tp] = tasks_where($f);
 $snap = db_row("SELECT COUNT(*) AS tasks, COALESCE(SUM(t.is_done = 0), 0) AS open_t,

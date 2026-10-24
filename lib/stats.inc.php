@@ -2,13 +2,14 @@
 declare(strict_types=1);
 
 const INFL_DAY_TYPES = "'D1_MOVED','D2_SET','D2_MOVED'";
+const DAY_TYPES = "'D1_MOVED','D2_SET','D2_MOVED','ALREADY_EXTENDED'";   // days counted in totals
 
 function kpi_counts(array $f, ?array $range = null): array
 {
     [$w, $p] = events_where($f, 'all', $range);
     $r = db_row("SELECT
         COALESCE(SUM(e.category = 'inflation'), 0) AS infl,
-        COALESCE(SUM(CASE WHEN e.event_type IN (" . INFL_DAY_TYPES . ") THEN e.days_added ELSE 0 END), 0) AS days,
+        COALESCE(SUM(CASE WHEN e.event_type IN (" . DAY_TYPES . ") THEN e.days_added ELSE 0 END), 0) AS days,
         COALESCE(SUM(e.event_type IN ('D1_MOVED','DEADLINE_REMOVED')), 0) AS rewritten,
         COALESCE(SUM(e.event_type = 'TASK_DELETED'), 0) AS deleted,
         COALESCE(SUM(e.category = 'inflation' AND e.after_deadline = 1), 0) AS after
@@ -28,7 +29,7 @@ function scorecard_metrics(): array
         'padding'    => ['Padding ratio', 'board', 'x', 'SUM(planned_days) / SUM(est_days) over tasks where both > 0. 1.0× = plan window equals the estimate.'],
         'padded'     => ['Padded tasks', 'board', 'int', 'planned_days ≥ 1.5 × est_days and planned − est ≥ 2.'],
         'infl'       => ['Inflation events', 'period', 'int', 'Inflation events detected in the date range.'],
-        'days'       => ['Days added', 'period', 'int', 'D1_MOVED + D2_SET + D2_MOVED days_added in range.'],
+        'days'       => ['Days added', 'period', 'int', 'Working days added by deadline moves (incl. the pre-tracking baseline) in range.'],
         'rewritten'  => ['Originals rewritten', 'period', 'int', 'D1_MOVED + DEADLINE_REMOVED.'],
         'after'      => ['Ext. after deadline', 'period', 'int', 'Inflation events where the old date had already passed.'],
         'noreason'   => ['Ext. no reason', 'period', 'int', 'D1_MOVED / D2_SET / D2_MOVED with an empty reason.'],
@@ -51,7 +52,7 @@ function scorecard_compute(array $f): array
     [$ew, $ep] = events_where($f, 'all');
     $per = db_all("SELECT COALESCE(e.ba_email,'') AS k, MAX(e.ba_name) AS nm,
         COALESCE(SUM(e.category = 'inflation'), 0) AS infl,
-        COALESCE(SUM(CASE WHEN e.event_type IN (" . INFL_DAY_TYPES . ") THEN e.days_added ELSE 0 END), 0) AS days,
+        COALESCE(SUM(CASE WHEN e.event_type IN (" . DAY_TYPES . ") THEN e.days_added ELSE 0 END), 0) AS days,
         COALESCE(SUM(e.event_type IN ('D1_MOVED','DEADLINE_REMOVED')), 0) AS rewritten,
         COALESCE(SUM(e.category = 'inflation' AND e.after_deadline = 1), 0) AS after,
         COALESCE(SUM(e.event_type IN (" . INFL_DAY_TYPES . ") AND (e.reason IS NULL OR TRIM(e.reason) = '')), 0) AS noreason,
@@ -169,11 +170,12 @@ function chart_payload(array $f): array
         $weeks[$d->format('Y-m-d')] = $d->format('j M');
     }
     $wkRange = ['from_utc' => utc_str($start), 'to_utc' => $f['to_utc']];
-    $wkExpr = "DATE_SUB(DATE(DATE_ADD(e.detected_at, INTERVAL 330 MINUTE)), INTERVAL WEEKDAY(DATE_ADD(e.detected_at, INTERVAL 330 MINUTE)) DAY)";
+    $ist = 'DATE_ADD(' . event_date_expr('e') . ', INTERVAL 330 MINUTE)';
+    $wkExpr = "DATE_SUB(DATE($ist), INTERVAL WEEKDAY($ist) DAY)";
 
     [$w, $p] = events_where($f, 'all', $wkRange);
     $daysRows = db_all("SELECT $wkExpr AS wk, COALESCE(e.ba_email,'') AS k, SUM(e.days_added) AS v
-        FROM events e WHERE $w AND e.event_type IN (" . INFL_DAY_TYPES . ") GROUP BY wk, k", $p);
+        FROM events e WHERE $w AND e.event_type IN (" . DAY_TYPES . ") GROUP BY wk, k", $p);
     $delRows = db_all("SELECT $wkExpr AS wk, COALESCE(e.ba_email,'') AS k, COUNT(*) AS v
         FROM events e WHERE $w AND e.event_type = 'TASK_DELETED' GROUP BY wk, k", $p);
 

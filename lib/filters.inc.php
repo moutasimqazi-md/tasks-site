@@ -3,6 +3,20 @@ declare(strict_types=1);
 
 const NO_BA = '__none__';
 
+/**
+ * The date an event is ABOUT (UTC DATETIME), not when n8n noticed it:
+ *  - changed_at when the source knows it (Notion),
+ *  - the original deadline (IST midnight) for pre-tracking baseline rows,
+ *  - otherwise detected_at (n8n runs hourly, so this is within the hour).
+ */
+function event_date_expr(string $a = 'e'): string
+{
+    return "CASE WHEN $a.changed_at IS NOT NULL THEN $a.changed_at
+                 WHEN $a.event_type = 'ALREADY_EXTENDED' AND $a.old_value REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}\$'
+                      THEN DATE_SUB(STR_TO_DATE($a.old_value, '%Y-%m-%d'), INTERVAL 330 MINUTE)
+                 ELSE $a.detected_at END";
+}
+
 function valid_ymd(?string $s): ?DateTimeImmutable
 {
     if (!is_string($s) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
@@ -46,7 +60,7 @@ function load_filters(): array
         case '7d': $from = $today->modify('-6 days'); break;
         case 'month': $from = $today->modify('first day of this month'); break;
         case 'all':
-            $min = db_val('SELECT MIN(detected_at) FROM events');
+            $min = db_val('SELECT MIN(' . event_date_expr('e') . ') FROM events e');
             $from = $min ? (new DateTimeImmutable((string)$min, tz_utc()))->setTimezone(tz_ist())->setTime(0, 0) : $today->modify('-29 days');
             break;
         case 'custom':
@@ -78,7 +92,7 @@ function load_filters(): array
         'ba' => str_list($g['ba'] ?? null), 'project' => str_list($g['project'] ?? null),
         'source' => $source, 'q' => $q,
         'types' => preg_grep('/^[A-Z0-9_]{1,30}$/', str_list($g['types'] ?? null)),
-        'pre' => !empty($g['pre']), 'restores' => !empty($g['restores']),
+        'pre' => true,   // pre-tracking (ALREADY_EXTENDED) rows are always included 'restores' => !empty($g['restores']),
     ];
     $f['types'] = array_values($f['types']);
 
@@ -89,7 +103,6 @@ function load_filters(): array
     if ($f['project']) $qs['project'] = $f['project'];
     if ($source !== '') $qs['source'] = $source;
     if ($q !== '') $qs['q'] = $q;
-    if ($f['pre']) $qs['pre'] = '1';
     $f['_qs'] = $qs;
     return $f;
 }
@@ -118,8 +131,9 @@ function like_escape(string $q): string
 function events_where(array $f, string $scope = 'all', ?array $range = null, string $a = 'e'): array
 {
     $w = []; $p = [];
-    $w[] = "$a.detected_at >= ?"; $p[] = $range['from_utc'] ?? $f['from_utc'];
-    $w[] = "$a.detected_at < ?";  $p[] = $range['to_utc'] ?? $f['to_utc'];
+    $when = '(' . event_date_expr($a) . ')';
+    $w[] = "$when >= ?"; $p[] = $range['from_utc'] ?? $f['from_utc'];
+    $w[] = "$when < ?";  $p[] = $range['to_utc'] ?? $f['to_utc'];
 
     if ($scope === 'inflation') {
         $w[] = "$a.category = 'inflation'";

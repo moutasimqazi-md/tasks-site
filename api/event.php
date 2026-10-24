@@ -2,6 +2,8 @@
 declare(strict_types=1);
 define('IS_API', true);
 require __DIR__ . '/../lib/auth.php';
+require __DIR__ . '/../lib/filters.inc.php';
+require __DIR__ . '/../lib/columns.inc.php';
 
 function comment_list(int $eventId): array
 {
@@ -29,6 +31,7 @@ function event_view(array $r): array
         'assignee' => $r['assignee'],
         'ba' => ba_label($r['ba_email'], $r['ba_name']),
         'detected' => fmt_ist($r['detected_at']) . ' IST',
+        'when' => fmt_event_when($r + ['ev_at' => $r['ev_at'] ?? $r['detected_at']]) . ' IST',
         'changed_at' => $r['changed_at'] ? fmt_ist($r['changed_at']) . ' IST' : '—',
         'changed_by' => ($r['changed_by'] ?? '') !== '' ? $r['changed_by'] : '—',
         'change' => fmt_change($r),
@@ -42,7 +45,7 @@ function event_view(array $r): array
 }
 
 $id = (int)($_GET['id'] ?? 0);
-$ev = $id > 0 ? db_row('SELECT * FROM events WHERE id = ?', [$id]) : null;
+$ev = $id > 0 ? db_row('SELECT e.*, (' . event_date_expr('e') . ') AS ev_at FROM events e WHERE e.id = ?', [$id]) : null;
 if (!$ev) {
     json_out(['error' => 'Event not found'], 404);
 }
