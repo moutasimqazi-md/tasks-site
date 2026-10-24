@@ -1,0 +1,4 @@
+timeline_config.php
+*.log
+.claude/
+*.zip
