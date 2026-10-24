@@ -30,16 +30,16 @@
         d.querySelector('.count').textContent = on.length === 0 ? 'All' : on.length === 1 ? on[0].parentElement.textContent.trim() : on.length + ' selected';
       });
     });
-    form.querySelector('select.src')?.addEventListener('change', () => form.submit());
   });
   document.addEventListener('click', (e) => {
-    document.querySelectorAll('details.ms[open]').forEach((d) => { if (!d.contains(e.target)) d.removeAttribute('open'); });
+    document.querySelectorAll('details.ms[open], details.fpanel[open]').forEach((d) => { if (!d.contains(e.target)) d.removeAttribute('open'); });
   });
 
   /* ---------- Hover explanations: every value says what it is ---------- */
   const clean = (el) => { const c = el.cloneNode(true); c.querySelectorAll('.info').forEach((i) => i.remove()); return c.textContent.replace(/[\u25B2\u25BC]/g, '').replace(/\s+/g, ' ').trim(); };
   document.querySelectorAll('table.grid').forEach((t) => {
     const heads = [...t.querySelectorAll('thead tr:last-child th')].map(clean);
+    if (!t.classList.contains('score')) t.querySelectorAll('tbody tr').forEach((tr) => [...tr.children].forEach((td, i) => { if (heads[i]) td.dataset.label = heads[i]; }));
     t.querySelectorAll('tbody tr, tfoot tr').forEach((tr) => {
       [...tr.children].forEach((td, i) => {
         if (td.title || td.classList.contains('empty-cell') || !heads[i]) return;
@@ -230,6 +230,7 @@
     const text = css('--text'), muted = css('--muted'), grid = css('--line');
     Chart.defaults.color = muted; Chart.defaults.borderColor = grid;
     Chart.defaults.font.family = 'Inter, system-ui, sans-serif'; Chart.defaults.font.size = 12;
+    Chart.defaults.animation = { duration: 350 };
     Object.values(instances).forEach((c) => c.destroy());
     for (const k of Object.keys(instances)) delete instances[k];
 
@@ -286,7 +287,8 @@
     const pd = sorted('padding');
     specs.padding = {
       ok: pd.length > 0,
-      insight: () => pd[0].name + ' pads plans the most: ' + f1(pd[0].padding) + '\u00D7 the estimate. 1.0\u00D7 means the plan window equals the estimate.',
+      insight: () => pd[0].padding < 1.15 ? 'Plans are close to the estimates for everyone (highest: ' + pd[0].name + ' at ' + f1(pd[0].padding) + '\u00D7). 1.0\u00D7 = no padding.'
+        : pd[0].name + ' pads plans the most: the plan window is ' + f1(pd[0].padding) + '\u00D7 the estimate.',
       cfg: { type: 'bar', data: { labels: pd.map((b) => b.name), datasets: [{ label: 'Padding ratio', data: pd.map((b) => b.padding), ...bar(pd.map((b) => b.color)) }] },
         options: base({ indexAxis: 'y', layout: { padding: { right: 56, top: 6 } },
           plugins: { ...base().plugins, valueLabels: { show: true, format: (v) => f1(v) + '\u00D7' }, refLine: { axis: 'x', value: 1, label: '1.0\u00D7' } },

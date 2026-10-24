@@ -12,7 +12,7 @@ $page = min($page, max(1, (int)ceil($total / PER_PAGE)));
 [$sql, $p] = events_sql($f, 'inflations', $expr, $dir, PER_PAGE, ($page - 1) * PER_PAGE);
 $rows = db_all($sql, $p);
 
-render_header('Inflated dates', 'inflations', $f, 'Click a row for the task history and comments.');
+render_header('Date changes', 'inflations', $f, 'Every time a start date, deadline or estimate was pushed later. Click a row for the history and comments.');
 render_filter_bar($f, ['types' => true, 'export' => 'inflations']);
 render_events_table($defs, table_keys($defs), $rows,
     ['sortable' => true, 'sort' => $sortKey, 'dir' => $dir, 'rowClass' => 'row_class_inflation']);

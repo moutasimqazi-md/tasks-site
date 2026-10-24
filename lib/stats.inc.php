@@ -74,6 +74,18 @@ function scorecard_compute(array $f): array
         if ($rows[$k]['name'] === '') $rows[$k]['name'] = (string)$r['nm'];
         foreach (['infl', 'days', 'rewritten', 'after', 'noreason', 'deleted', 'overdue_del'] as $m) $rows[$k][$m] = (int)$r[$m];
     }
+    // Same person under an old and a new address -> one row.
+    $sumKeys = ['tasks', 'extended', 'days_total', 'padded', 'sp', 'se', 'infl', 'days', 'rewritten', 'after', 'noreason', 'deleted', 'overdue_del'];
+    foreach (ba_alias() as $from => $to) {
+        if (!isset($rows[$from])) continue;
+        if (isset($rows[$to])) {
+            foreach ($sumKeys as $m) $rows[$to][$m] += $rows[$from][$m];
+        } else {
+            $rows[$to] = $rows[$from];
+            $rows[$to]['key'] = $to;
+        }
+        unset($rows[$from]);
+    }
     foreach ($rows as $k => &$r) {
         $r['name'] = ba_label($k, $r['name']);
         $r['pct_ext']  = $r['tasks'] > 0 ? $r['extended'] / $r['tasks'] * 100 : null;
@@ -198,9 +210,9 @@ function chart_payload(array $f): array
         if (!$f['ba'] || in_array($k, $f['ba'], true)) $ensure($k, $nm);
     }
     $idx = array_flip(array_keys($weeks));
-    foreach ($daysRows as $r) { $ensure($r['k']); if (isset($idx[$r['wk']])) $bas[$r['k']]['weekly_days'][$idx[$r['wk']]] = (int)$r['v']; }
-    foreach ($delRows as $r)  { $ensure($r['k']); if (isset($idx[$r['wk']])) $bas[$r['k']]['weekly_deleted'][$idx[$r['wk']]] = (int)$r['v']; }
-    foreach ($typeRows as $r) { $ensure($r['k']); $bas[$r['k']]['types'][$r['t']] = (int)$r['v']; }
+    foreach ($daysRows as $r) { $k = canon_email($r['k']); $ensure($k); if (isset($idx[$r['wk']])) $bas[$k]['weekly_days'][$idx[$r['wk']]] += (int)$r['v']; }
+    foreach ($delRows as $r)  { $k = canon_email($r['k']); $ensure($k); if (isset($idx[$r['wk']])) $bas[$k]['weekly_deleted'][$idx[$r['wk']]] += (int)$r['v']; }
+    foreach ($typeRows as $r) { $k = canon_email($r['k']); $ensure($k); $bas[$k]['types'][$r['t']] = ($bas[$k]['types'][$r['t']] ?? 0) + (int)$r['v']; }
     foreach ($sc as $r) {
         $bas[$r['key']]['pct_ext'] = $r['pct_ext']; $bas[$r['key']]['avg_slip'] = $r['avg_slip'];
         $bas[$r['key']]['padding'] = $r['padding']; $bas[$r['key']]['tasks'] = $r['tasks'];

@@ -7,8 +7,11 @@ $f = load_filters();
 $sort = (string)($_GET['sort'] ?? 'name');
 $dir = (($_GET['dir'] ?? 'asc') === 'desc') ? 'desc' : 'asc';
 [$rows, $team] = scorecard_rows($f, $sort, $dir);
-$metrics = scorecard_metrics();
-if (!isset($metrics[$sort]) && $sort !== 'name') $sort = 'name';
+$allMetrics = scorecard_metrics();
+$full = ($_GET['cols'] ?? '') === 'all';
+$headline = ['tasks', 'pct_ext', 'avg_slip', 'infl', 'days', 'deleted'];
+$metrics = $full ? $allMetrics : array_intersect_key($allMetrics, array_flip($headline));
+if (!isset($allMetrics[$sort]) && $sort !== 'name') $sort = 'name';
 
 $th = function (string $key, string $label, string $tip = '') use ($sort, $dir) {
     $active = $sort === $key;
@@ -23,9 +26,12 @@ $period = array_filter($metrics, fn($m) => $m[1] === 'period');
 render_header('BA scorecard', 'scorecard', $f, 'One row per BA. Green is better than the team average, red is worse. Click a name to see their inflations.');
 render_filter_bar($f, ['export' => 'scorecard']);
 ?>
-<p class="muted small">Board columns use today's open tasks (project and source filters only, not the date range).
-  Period columns use events in the date range. Cells are coloured against the team average:
-  <span class="cell good inline">better</span> <span class="cell mid inline">within ±15%</span> <span class="cell bad inline">worse</span> (lower is better).</p>
+<div class="score-note">
+  <p class="muted small">Colours compare each BA with the team average:
+    <span class="cell good inline">better</span> <span class="cell mid inline">about the same (±15%)</span> <span class="cell bad inline">worse</span> — lower is better.
+    “Tasks” and “% extended” are about the board today; the rest cover the selected period.</p>
+  <a class="btn small" href="<?= e(self_url(['cols' => $full ? null : 'all'])) ?>"><?= $full ? '− Fewer columns' : '+ More columns' ?></a>
+</div>
 <div class="table-wrap"><table class="grid score">
   <thead>
     <tr class="group"><th></th><th colspan="<?= count($board) ?>">Board (current tasks)</th><th colspan="<?= count($period) ?>">Period (events in range)</th></tr>

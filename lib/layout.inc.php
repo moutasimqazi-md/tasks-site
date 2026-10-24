@@ -22,9 +22,9 @@ function render_header(string $title, string $active, ?array $f = null, string $
     }
     $syncTxt = $sync ? fmt_ist((string)$sync, 'j M Y, H:i') . ' IST' : 'never';
     $qs = $f ? '?' . http_build_query($f['_qs']) : '';
-    $nav = ['index.php' => ['overview', 'Overview'], 'inflations.php' => ['inflations', 'Inflated dates'],
-        'deletions.php' => ['deletions', 'Deleted tickets'], 'scorecard.php' => ['scorecard', 'BA scorecard'],
-        'graphs.php' => ['graphs', 'BA graphs']];
+    $nav = ['index.php' => ['overview', 'Overview'], 'tasks.php' => ['tasks', 'Tasks'], 'inflations.php' => ['inflations', 'Date changes'],
+        'deletions.php' => ['deletions', 'Deleted'], 'scorecard.php' => ['scorecard', 'People'],
+        'graphs.php' => ['graphs', 'Charts']];
     ?><!doctype html>
 <html lang="en">
 <head>
@@ -74,15 +74,37 @@ function ms_dropdown(string $name, string $label, array $options, array $selecte
     echo '</div></details>';
 }
 
-/** opts: types(bool) inflation-type filter, restores(bool) restore checkbox, export(page) */
+function chip_url(string $key, string $val = ''): string
+{
+    $q = $_GET;
+    if ($val !== '' && isset($q[$key]) && is_array($q[$key])) {
+        $q[$key] = array_values(array_filter($q[$key], fn($x) => $x !== $val));
+        if (!$q[$key]) unset($q[$key]);
+    } else {
+        unset($q[$key]);
+    }
+    unset($q['page']);
+    return basename($_SERVER['SCRIPT_NAME']) . ($q ? '?' . http_build_query($q) : '');
+}
+
+/**
+ * Compact filter bar: period pills + search + one "Filters" popover; active filters show as removable chips.
+ * opts: types(bool), restores(bool), export(page), period(bool, default true), hidden(array of extra hidden fields)
+ */
 function render_filter_bar(array $f, array $opts = []): void
 {
     $baOpts = ba_directory() + [NO_BA => '(Unassigned)'];
     $presets = ['today' => 'Today', '7d' => '7 days', '30d' => '30 days', 'month' => 'This month', 'all' => 'All time', 'custom' => 'Custom'];
+    $period = ($opts['period'] ?? true) !== false;
+    $active = count($f['ba']) + count($f['project']) + count($f['assignee']) + count($f['types']) + ($f['source'] !== '' ? 1 : 0) + ($f['restores'] ? 1 : 0);
+    $self = basename($_SERVER['SCRIPT_NAME']);
+    $keep = array_intersect_key($_GET, array_flip(['view', 'show']));
     ?>
-<form class="filters" method="get" action="<?= e(basename($_SERVER['SCRIPT_NAME'])) ?>">
+<form class="filters" method="get" action="<?= e($self) ?>">
   <input type="hidden" name="range" value="<?= e($f['preset']) ?>" data-role="range">
+  <?php foreach (($opts['hidden'] ?? []) as $hk => $hv): ?><input type="hidden" name="<?= e($hk) ?>" value="<?= e((string)$hv) ?>"><?php endforeach; ?>
   <div class="filter-top">
+    <?php if ($period): ?>
     <div class="pills" role="group" aria-label="Period (IST)">
       <?php foreach ($presets as $v => $t): ?>
         <?php if ($v === 'custom'): ?>
@@ -97,32 +119,47 @@ function render_filter_bar(array $f, array $opts = []): void
       <span class="muted">to</span>
       <input type="date" name="to" value="<?= e($f['to']) ?>" aria-label="To date">
     </span>
-    <span class="range-note">Showing <strong><?= e(fmt_date($f['from'])) ?></strong> – <strong><?= e(fmt_date($f['to'])) ?></strong> <span class="muted">(IST)</span></span>
-  </div>
-  <div class="filter-main">
-    <?php ms_dropdown('ba', 'BA', $baOpts, $f['ba']); ?>
-    <?php $pr = project_list(); ms_dropdown('project', 'Project', array_combine($pr, $pr) ?: [], $f['project']); ?>
-    <?php if (!empty($opts['types'])):
-      $tys = array_column(db_all("SELECT DISTINCT event_type FROM events WHERE category = 'inflation' ORDER BY event_type"), 'event_type');
-      $to = []; foreach ($tys as $t) $to[$t] = event_label($t);
-      ms_dropdown('types', 'Type', $to, $f['types']);
-    endif; ?>
-    <select name="source" aria-label="Source" class="src">
-      <option value="">Source: All</option>
-      <option value="sheet"<?= $f['source'] === 'sheet' ? ' selected' : '' ?>>Source: Sheet</option>
-      <option value="notion"<?= $f['source'] === 'notion' ? ' selected' : '' ?>>Source: Notion</option>
-    </select>
-    <input class="search" type="search" name="q" value="<?= e($f['q']) ?>" placeholder="Search title or assignee…" maxlength="100" aria-label="Search">
-    <?php if (!empty($opts['restores'])): ?>
-    <label class="chk"><input type="checkbox" name="restores" value="1"<?= $f['restores'] ? ' checked' : '' ?>> Show restores</label>
     <?php endif; ?>
     <span class="grow"></span>
+    <input class="search" type="search" name="q" value="<?= e($f['q']) ?>" placeholder="Search task or person…" maxlength="100" aria-label="Search">
+    <details class="fpanel">
+      <summary class="btn">Filters<?= $active ? ' <span class="n">' . $active . '</span>' : '' ?></summary>
+      <div class="fpanel-body">
+        <?php ms_dropdown('ba', 'BA', $baOpts, $f['ba']); ?>
+        <?php $pr = project_list(); ms_dropdown('project', 'Project', array_combine($pr, $pr) ?: [], $f['project']); ?>
+        <?php $as = assignee_list(); ms_dropdown('assignee', 'Assignee', array_combine($as, $as) ?: [], $f['assignee']); ?>
+        <?php if (!empty($opts['types'])):
+          $tys = array_column(db_all("SELECT DISTINCT event_type FROM events WHERE category = 'inflation' ORDER BY event_type"), 'event_type');
+          $to = []; foreach ($tys as $t) $to[$t] = event_label($t);
+          ms_dropdown('types', 'Change type', $to, $f['types']);
+        endif; ?>
+        <select name="source" aria-label="Source" class="src">
+          <option value="">Source: All</option>
+          <option value="sheet"<?= $f['source'] === 'sheet' ? ' selected' : '' ?>>Source: Sheets</option>
+          <option value="notion"<?= $f['source'] === 'notion' ? ' selected' : '' ?>>Source: Notion</option>
+        </select>
+        <?php if (!empty($opts['restores'])): ?>
+          <label class="chk"><input type="checkbox" name="restores" value="1"<?= $f['restores'] ? ' checked' : '' ?>> Show restores</label>
+        <?php endif; ?>
+      </div>
+    </details>
     <button class="btn primary" type="submit">Apply</button>
-    <a class="btn ghost" href="<?= e(basename($_SERVER['SCRIPT_NAME'])) ?>">Reset</a>
     <?php if (!empty($opts['export'])): ?>
-      <a class="btn" href="<?= e(base_path() . '/export.php?page=' . $opts['export'] . '&' . http_build_query(array_diff_key($_GET, ['page' => 1]))) ?>">⬇ Export CSV</a>
+      <a class="btn ghost" href="<?= e(base_path() . '/export.php?page=' . $opts['export'] . '&' . http_build_query(array_diff_key($_GET, ['page' => 1]))) ?>" title="Download exactly what is filtered as CSV">⬇ CSV</a>
     <?php endif; ?>
   </div>
+  <?php if ($active || $f['q'] !== '' || $period): ?>
+  <div class="chips">
+    <?php if ($period): ?><span class="range-note">Showing <strong><?= e(fmt_date($f['from'])) ?></strong> – <strong><?= e(fmt_date($f['to'])) ?></strong> <span class="muted">(IST)</span></span><?php endif; ?>
+    <?php foreach ($f['ba'] as $v): ?><a class="chip" href="<?= e(chip_url('ba', $v)) ?>" title="Remove"><?= e($baOpts[$v] ?? $v) ?> <i>✕</i></a><?php endforeach; ?>
+    <?php foreach ($f['project'] as $v): ?><a class="chip" href="<?= e(chip_url('project', $v)) ?>" title="Remove"><?= e($v) ?> <i>✕</i></a><?php endforeach; ?>
+    <?php foreach ($f['assignee'] as $v): ?><a class="chip" href="<?= e(chip_url('assignee', $v)) ?>" title="Remove"><?= e($v) ?> <i>✕</i></a><?php endforeach; ?>
+    <?php foreach ($f['types'] as $v): ?><a class="chip" href="<?= e(chip_url('types', $v)) ?>" title="Remove"><?= e(event_label($v)) ?> <i>✕</i></a><?php endforeach; ?>
+    <?php if ($f['source'] !== ''): ?><a class="chip" href="<?= e(chip_url('source')) ?>" title="Remove">Source: <?= e($f['source'] === 'sheet' ? 'Sheets' : 'Notion') ?> <i>✕</i></a><?php endif; ?>
+    <?php if ($f['q'] !== ''): ?><a class="chip" href="<?= e(chip_url('q')) ?>" title="Remove">“<?= e($f['q']) ?>” <i>✕</i></a><?php endif; ?>
+    <?php if ($active || $f['q'] !== ''): ?><a class="chip-clear" href="<?= e($self . ($keep ? '?' . http_build_query($keep) : '')) ?>">Clear all</a><?php endif; ?>
+  </div>
+  <?php endif; ?>
 </form>
 <?php
 }

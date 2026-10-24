@@ -90,6 +90,7 @@ function load_filters(): array
         'prev_from_utc' => utc_str($prevFrom), 'prev_to_utc' => utc_str($from),
         'prev_from' => $prevFrom->format('Y-m-d'), 'prev_to' => $from->modify('-1 day')->format('Y-m-d'),
         'ba' => str_list($g['ba'] ?? null), 'project' => str_list($g['project'] ?? null),
+        'assignee' => str_list($g['assignee'] ?? null, 40),
         'source' => $source, 'q' => $q,
         'types' => preg_grep('/^[A-Z0-9_]{1,30}$/', str_list($g['types'] ?? null)),
         'pre' => true,   // pre-tracking (ALREADY_EXTENDED) rows are always included 'restores' => !empty($g['restores']),
@@ -101,6 +102,7 @@ function load_filters(): array
     if ($preset === 'custom') { $qs['from'] = $f['from']; $qs['to'] = $f['to']; }
     if ($f['ba']) $qs['ba'] = $f['ba'];
     if ($f['project']) $qs['project'] = $f['project'];
+    if ($f['assignee']) $qs['assignee'] = $f['assignee'];
     if ($source !== '') $qs['source'] = $source;
     if ($q !== '') $qs['q'] = $q;
     $f['_qs'] = $qs;
@@ -118,6 +120,17 @@ function in_nullable(string $col, array $vals, array &$params): string
     }
     if (count($real) !== count($vals)) {
         $parts[] = "($col IS NULL OR $col = '')";
+    }
+    return '(' . implode(' OR ', $parts) . ')';
+}
+
+/** Assignee column holds comma lists like "Lakshmi, Saritha": match each chosen name as a substring. */
+function assignee_clause(string $col, array $names, array &$params): string
+{
+    $parts = [];
+    foreach ($names as $n) {
+        $parts[] = "$col LIKE ?";
+        $params[] = like_escape($n);
     }
     return '(' . implode(' OR ', $parts) . ')';
 }
@@ -148,8 +161,9 @@ function events_where(array $f, string $scope = 'all', ?array $range = null, str
     if (!$f['pre'] && !$explicitPre) {
         $w[] = "$a.event_type <> 'ALREADY_EXTENDED'";
     }
-    if ($f['ba'])      $w[] = in_nullable("$a.ba_email", $f['ba'], $p);
+    if ($f['ba'])      $w[] = in_nullable("$a.ba_email", ba_expand($f['ba']), $p);
     if ($f['project']) { $w[] = "$a.project IN (" . placeholders(count($f['project'])) . ')'; array_push($p, ...$f['project']); }
+    if ($f['assignee']) $w[] = assignee_clause("$a.assignee", $f['assignee'], $p);
     if ($f['source'] !== '') { $w[] = "$a.source = ?"; $p[] = $f['source']; }
     if ($f['q'] !== '') {
         $w[] = "($a.title LIKE ? OR $a.assignee LIKE ?)";
@@ -162,8 +176,9 @@ function events_where(array $f, string $scope = 'all', ?array $range = null, str
 function tasks_where(array $f, string $a = 't'): array
 {
     $w = ["$a.deleted_at IS NULL"]; $p = [];
-    if ($f['ba'])      $w[] = in_nullable("$a.ba_email", $f['ba'], $p);
+    if ($f['ba'])      $w[] = in_nullable("$a.ba_email", ba_expand($f['ba']), $p);
     if ($f['project']) { $w[] = "$a.project IN (" . placeholders(count($f['project'])) . ')'; array_push($p, ...$f['project']); }
+    if ($f['assignee']) $w[] = assignee_clause("$a.assignee", $f['assignee'], $p);
     if ($f['source'] !== '') { $w[] = "$a.source = ?"; $p[] = $f['source']; }
     return [implode(' AND ', $w), $p];
 }

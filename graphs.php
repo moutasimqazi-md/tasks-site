@@ -5,7 +5,7 @@ require __DIR__ . '/lib/common.inc.php';
 
 $f = load_filters();
 [$tw, $tp] = tasks_where($f);
-$top = db_all("SELECT t.* FROM tasks t WHERE $tw AND t.is_done = 0 ORDER BY t.total_added DESC, t.task_key LIMIT 10", $tp);
+$top = db_all("SELECT t.* FROM tasks t WHERE $tw AND t.is_done = 0 AND t.total_added > 0 ORDER BY t.total_added DESC, t.task_key LIMIT 10", $tp);
 
 $charts = [
     ['weekly_days', 'Working days added per week', 'Each line is a BA. Weeks start on Monday (IST).'],
@@ -16,7 +16,7 @@ $charts = [
     ['by_type', 'What kind of inflation', 'Inflation events by type, per BA.'],
 ];
 
-render_header('BA graphs', 'graphs', $f, 'Who inflates timelines, who gets tickets deleted, and how padded the plans are.');
+render_header('Charts', 'graphs', $f, 'Who inflates timelines, who gets tickets deleted, and how padded the plans are.');
 render_filter_bar($f);
 ?>
 <div id="charts" class="chart-grid" data-endpoint="<?= e(base_path() . '/api/charts.php') ?>">
@@ -25,10 +25,10 @@ render_filter_bar($f);
 
 <h2>10 most inflated open tasks</h2>
 <div class="table-wrap"><table class="grid">
-  <thead><tr><th class="wide">Task<?= info('Open tasks from the board (deleted_at is empty, not done), ordered by total days added.') ?></th><th>Project</th><th>BA</th><th>Assignee</th>
+  <thead><tr><th class="wide">Task<?= info('Open tasks whose deadline has moved, ordered by total working days added.') ?></th><th>Project</th><th>BA</th><th>Assignee</th>
     <th>First D1 → current deadline</th><th class="num">+Days</th><th class="num">% over plan</th><th class="num">Times moved</th></tr></thead>
   <tbody>
-  <?php if (!$top): ?><tr><td colspan="8" class="empty-cell">No data for these filters.</td></tr><?php endif; ?>
+  <?php if (!$top): ?><tr><td colspan="8" class="empty-cell">No open task has slipped yet.</td></tr><?php endif; ?>
   <?php foreach ($top as $t):
       $cur = trim((string)$t['d2']) !== '' ? $t['d2'] : $t['d1'];
       $over = (int)$t['planned_days'] > 0 ? round((int)$t['total_added'] / (int)$t['planned_days'] * 100) . '%' : '—'; ?>

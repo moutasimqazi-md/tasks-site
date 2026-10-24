@@ -53,14 +53,14 @@ function event_labels(): array
 {
     return [
         'D1_MOVED'         => ['Original deadline moved', 'Original deadline moved later (commitment rewritten — most serious)'],
-        'D2_SET'           => ['Revised deadline set', 'Revised deadline set'],
-        'D2_MOVED'         => ['Revised deadline moved again', 'Revised deadline moved again'],
-        'START_PUSHED'     => ['Start date pushed', 'Start date pushed'],
-        'ESTIMATE_UP'      => ['Estimate increased', 'Estimate increased'],
+        'D2_SET'           => ['New deadline set', 'A revised deadline (D2) was set after the original'],
+        'D2_MOVED'         => ['Deadline moved again', 'The revised deadline was moved later again'],
+        'START_PUSHED'     => ['Start date pushed', 'Start date pushed later'],
+        'ESTIMATE_UP'      => ['Estimate increased', 'Estimate (days) increased'],
         'DEADLINE_REMOVED' => ['Deadline removed', 'Deadline removed (hides the slip)'],
-        'ALREADY_EXTENDED' => ['Already extended (pre-tracking)', 'Already extended before tracking began (baseline from first run)'],
-        'TASK_DELETED'     => ['Ticket deleted', 'Ticket deleted'],
-        'TASK_RESTORED'    => ['Ticket restored', 'Deleted ticket came back'],
+        'ALREADY_EXTENDED' => ['Extended before tracking', 'Already extended when tracking began (baseline from the first n8n run)'],
+        'TASK_DELETED'     => ['Ticket deleted', 'Ticket disappeared from the board'],
+        'TASK_RESTORED'    => ['Ticket restored', 'A deleted ticket came back'],
     ];
 }
 
@@ -150,13 +150,51 @@ function self_url(array $set = []): string
     return basename($_SERVER['SCRIPT_NAME']) . ($q ? '?' . http_build_query($q) : '');
 }
 
+/** Known BAs: the name shown for an email always wins over whatever the sheet's BA column says. */
+function ba_canonical(): array
+{
+    return [
+        'akruti.patel@moveneticsdigital.com'   => 'Akruti Patel',
+        'asad.dongri@moveneticsdigital.com'    => 'Asad Dongri',
+        'binson.abraham@moveneticsdigital.com' => 'Binson Abraham',
+        'umama.qazi@moveneticsdigital.com'     => 'Umama Qazi',
+        'sapna.kaintu@moveneticsdigital.com'   => 'Sapna Kaintu',
+    ];
+}
+
+/** Old address => current address (same person). */
+function ba_alias(): array
+{
+    return ['moutasim.qazi@moveneticsdigital.com' => 'umama.qazi@moveneticsdigital.com'];
+}
+
+function canon_email(?string $e): string
+{
+    $e = (string)$e;
+    return ba_alias()[strtolower(trim($e))] ?? $e;
+}
+
+/** Selected BA emails plus any old addresses that belong to the same person. */
+function ba_expand(array $vals): array
+{
+    $out = $vals;
+    foreach (ba_alias() as $old => $new) {
+        if (in_array($new, $vals, true)) $out[] = $old;
+    }
+    return array_values(array_unique($out));
+}
+
 function ba_label(?string $email, ?string $name = null): string
 {
+    $email = canon_email($email);
+    $known = ba_canonical()[strtolower($email)] ?? null;
+    if ($known !== null) {
+        return $known;
+    }
     $name = trim((string)$name);
     if ($name !== '') {
         return $name;
     }
-    $email = (string)$email;
     if ($email === '') {
         return '(Unassigned)';
     }
@@ -169,31 +207,36 @@ function ba_directory(): array
     if ($dir !== null) {
         return $dir;
     }
-    $fallback = [
-        'akruti.patel@moveneticsdigital.com'    => 'Akruti Patel',
-        'asad.dongri@moveneticsdigital.com'     => 'Asad Dongri',
-        'binson.abraham@moveneticsdigital.com'  => 'Binson Abraham',
-        'umama.qazi@moveneticsdigital.com'      => 'Umama Qazi',   // n8n writes this address for AI Division B
-        'sapna.kaintu@moveneticsdigital.com'    => 'Sapna Kaintu',
-    ];
     $rows = db_all("SELECT ba_email, MAX(ba_name) AS ba_name FROM tasks WHERE ba_email IS NOT NULL AND ba_email <> '' GROUP BY ba_email
                     UNION ALL
                     SELECT ba_email, MAX(ba_name) AS ba_name FROM events WHERE ba_email IS NOT NULL AND ba_email <> '' GROUP BY ba_email");
     $out = [];
     foreach ($rows as $r) {
-        $em = (string)$r['ba_email'];
+        $em = canon_email((string)$r['ba_email']);
         $nm = trim((string)$r['ba_name']);
         if (!isset($out[$em]) || ($out[$em] === '' && $nm !== '')) {
             $out[$em] = $nm;
         }
     }
     foreach ($out as $em => $nm) {
-        if ($nm === '') {
-            $out[$em] = $fallback[strtolower($em)] ?? $em;
-        }
+        $out[$em] = ba_canonical()[strtolower($em)] ?? ($nm !== '' ? $nm : $em);
     }
     asort($out, SORT_NATURAL | SORT_FLAG_CASE);
     return $dir = $out;
+}
+
+/** Distinct individual assignee names (the column holds "A, B" lists). */
+function assignee_list(): array
+{
+    $names = [];
+    foreach (db_all("SELECT DISTINCT assignee FROM tasks WHERE assignee IS NOT NULL AND assignee <> ''") as $r) {
+        foreach (preg_split('/\s*,\s*/', (string)$r['assignee']) as $n) {
+            $n = trim($n);
+            if ($n !== '') $names[mb_strtolower($n)] = $n;
+        }
+    }
+    uasort($names, 'strcasecmp');
+    return array_values($names);
 }
 
 function project_list(): array
