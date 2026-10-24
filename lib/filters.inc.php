@@ -167,7 +167,7 @@ function events_where(array $f, string $scope = 'all', ?array $range = null, str
         $w[] = "$a.event_type <> 'ALREADY_EXTENDED'";
     }
     if ($f['ba'])      $w[] = in_nullable("$a.ba_email", ba_expand($f['ba']), $p);
-    if ($f['project']) { $w[] = "$a.project IN (" . placeholders(count($f['project'])) . ')'; array_push($p, ...$f['project']); }
+    if ($f['project']) { $pj = project_expand($f['project']); $w[] = "$a.project IN (" . placeholders(count($pj)) . ')'; array_push($p, ...$pj); }
     if ($f['assignee']) $w[] = assignee_clause("$a.assignee", $f['assignee'], $p);
     if ($f['source'] !== '') { $w[] = "$a.source = ?"; $p[] = $f['source']; }
     if ($f['q'] !== '') {
@@ -182,7 +182,7 @@ function tasks_where(array $f, string $a = 't'): array
 {
     $w = ["$a.deleted_at IS NULL"]; $p = [];
     if ($f['ba'])      $w[] = in_nullable("$a.ba_email", ba_expand($f['ba']), $p);
-    if ($f['project']) { $w[] = "$a.project IN (" . placeholders(count($f['project'])) . ')'; array_push($p, ...$f['project']); }
+    if ($f['project']) { $pj = project_expand($f['project']); $w[] = "$a.project IN (" . placeholders(count($pj)) . ')'; array_push($p, ...$pj); }
     if ($f['assignee']) $w[] = assignee_clause("$a.assignee", $f['assignee'], $p);
     if ($f['source'] !== '') { $w[] = "$a.source = ?"; $p[] = $f['source']; }
     return [implode(' AND ', $w), $p];

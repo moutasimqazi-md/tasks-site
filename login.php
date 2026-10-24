@@ -47,8 +47,10 @@ $a = function (string $p): string {
 <title>Sign in · Timeline Tracker</title>
 <link rel="icon" type="image/svg+xml" href="<?= $a('favicon.svg') ?>">
 <link rel="stylesheet" href="<?= $a('app.css') ?>">
+<script src="<?= $a('theme.js') ?>"></script>
 </head>
 <body class="login-body">
+<button type="button" class="btn ghost icon-btn theme-float" data-role="theme-toggle" aria-label="Switch theme" title="Switch theme">🌙</button>
 <main class="auth">
   <section class="auth-side" aria-hidden="true">
     <img class="auth-logo" src="<?= $a('logo.png') ?>" alt="">

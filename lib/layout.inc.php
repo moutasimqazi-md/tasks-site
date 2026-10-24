@@ -36,6 +36,7 @@ function render_header(string $title, string $active, ?array $f = null, string $
 <title><?= e($title) ?> · Timeline Tracker</title>
 <link rel="icon" type="image/svg+xml" href="<?= asset('favicon.svg') ?>">
 <link rel="stylesheet" href="<?= asset('app.css') ?>">
+<script src="<?= asset('theme.js') ?>"></script>
 </head>
 <body>
 <header class="topbar">
@@ -50,6 +51,7 @@ function render_header(string $title, string $active, ?array $f = null, string $
   </nav>
   <div class="top-actions">
     <span class="sync<?= $stale ? ' stale' : '' ?>" title="Time of the latest n8n run<?= $stale ? ' — older than 3 hours' : '' ?>"><span class="dot"></span>Last sync: <?= e($syncTxt) ?></span>
+    <button type="button" class="btn ghost icon-btn" data-role="theme-toggle" aria-label="Switch theme" title="Switch theme">🌙</button>
     <form method="post" action="<?= e(base_path()) ?>/logout.php"><?= csrf_field() ?><button class="btn ghost" type="submit">Logout</button></form>
   </div>
 </header>

@@ -24,7 +24,7 @@ function names_from_emails(?string $emails): string
 $w = ['x.flagged_at >= ?', 'x.flagged_at < ?']; $p = [$f['from_utc'], $f['to_utc']];
 if ($level !== '') { $w[] = 'x.level = ?'; $p[] = $level; }
 if ($dept !== '')  { $w[] = 'x.dept = ?';  $p[] = $dept; }
-if ($f['project']) { $w[] = 'x.project IN (' . placeholders(count($f['project'])) . ')'; array_push($p, ...$f['project']); }
+if ($f['project']) { $pj = project_expand($f['project']); $w[] = 'x.project IN (' . placeholders(count($pj)) . ')'; array_push($p, ...$pj); }
 if ($f['q'] !== '') { $w[] = '(x.task LIKE ? OR x.assignees LIKE ?)'; $l = like_escape($f['q']); $p[] = $l; $p[] = $l; }
 $where = implode(' AND ', $w);
 
@@ -34,7 +34,7 @@ $setupMissing = false; $counts = ['inflated' => 0, 'above_plan' => 0, 'unclear' 
 $page = max(1, (int)($_GET['page'] ?? 1));
 try {
     foreach (db_all("SELECT x.level AS lv, COUNT(*) AS n FROM estimate_flags x WHERE " . implode(' AND ', array_filter($w, fn($c) => !str_starts_with($c, 'x.level'))) . " GROUP BY x.level",
-        array_values(array_filter(array_merge([$f['from_utc'], $f['to_utc']], $dept !== '' ? [$dept] : [], $f['project'], $f['q'] !== '' ? [like_escape($f['q']), like_escape($f['q'])] : []), fn($v) => true))) as $r) {
+        array_values(array_filter(array_merge([$f['from_utc'], $f['to_utc']], $dept !== '' ? [$dept] : [], project_expand($f['project']), $f['q'] !== '' ? [like_escape($f['q']), like_escape($f['q'])] : []), fn($v) => true))) as $r) {
         if (isset($counts[$r['lv']])) $counts[$r['lv']] = (int)$r['n'];
     }
     $total = (int)db_val("SELECT COUNT(*) FROM estimate_flags x WHERE $where", $p);
@@ -93,7 +93,7 @@ render_filter_bar($f, ['only' => ['project']]);
       <td class="nowrap"><?= e(fmt_ist($r['flagged_at'], 'j M Y')) ?></td>
       <td><?= badge($lv[0], $lv[1]) ?></td>
       <td class="wide"><span class="clip" title="<?= e($r['task']) ?>"><?= e($r['task']) ?></span></td>
-      <td><?= e($r['project']) ?></td>
+      <td><?= e(project_display($r['project'] ?? '')) ?></td>
       <td><?= e($deptLabel[$r['dept']] ?? (string)$r['dept']) ?></td>
       <td><?= e(names_from_emails($r['assignees'])) ?></td>
       <td class="num strong"><?= $trim($r['estimate_days']) ?> d</td>

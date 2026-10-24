@@ -27,7 +27,7 @@ function event_view(array $r): array
         'category' => $r['category'],
         'title' => (string)$r['title'],
         'link' => safe_url($r['link'] ?? ''),
-        'project' => $r['project'], 'board' => $r['board'], 'source' => $r['source'],
+        'project' => project_display($r['project'] ?? ''), 'board' => $r['board'], 'source' => $r['source'],
         'assignee' => assignee_display($r['assignee'] ?? ''),
         'ba' => ba_label($r['ba_email'], $r['ba_name']),
         'detected' => fmt_ist($r['detected_at']) . ' IST',

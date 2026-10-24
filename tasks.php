@@ -75,7 +75,7 @@ if ($view === 'tasks') {
         $dTip = trim((string)$t['d2']) !== '' && $d1 !== '' ? 'Original deadline ' . $d1 . ', revised to ' . $d2 : ($t['dl'] ? 'Deadline' : 'No deadline set');
         echo '<tr>'
             . '<td class="wide"><span class="clip" title="' . e($title) . '">' . $tHtml . '</span></td>'
-            . '<td>' . e($t['project']) . '</td>'
+            . '<td>' . e(project_display($t['project'] ?? '')) . '</td>'
             . '<td>' . e(assignee_display($t['assignee'] ?? '')) . '</td>'
             . '<td class="nowrap">' . e(ba_label($t['ba_email'], $t['ba_name'])) . '</td>'
             . '<td>' . ((int)$t['is_done'] ? '<span class="badge done">' . e($t['status']) . '</span>' : e($t['status'])) . '</td>'
@@ -97,7 +97,7 @@ $all = db_all("SELECT t.project, t.assignee, t.status, t.ba_email, t.ba_name, t.
 $groups = [];
 foreach ($all as $t) {
     if ($view === 'project') {
-        $names = [trim((string)$t['project']) !== '' ? (string)$t['project'] : '(no project)'];
+        $names = [project_display($t['project'] ?? '')];
     } else {
         $names = person_names((string)$t['assignee']);
         if (!$names) $names = ['(unassigned)'];
@@ -114,7 +114,7 @@ foreach ($all as $t) {
         }
         if ((int)$t['times_moved'] > 0 || (int)$t['total_added'] > 0) $g['extended']++;
         $g['slip'] += (int)$t['total_added'];
-        $other = $view === 'project' ? ba_label($t['ba_email'], $t['ba_name']) : trim((string)$t['project']);
+        $other = $view === 'project' ? ba_label($t['ba_email'], $t['ba_name']) : project_display($t['project'] ?? '');
         if ($other !== '') $g['who'][$other] = ($g['who'][$other] ?? 0) + 1;
         unset($g);
     }

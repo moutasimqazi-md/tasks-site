@@ -34,7 +34,7 @@ render_filter_bar($f);
       $over = (int)$t['planned_days'] > 0 ? round((int)$t['total_added'] / (int)$t['planned_days'] * 100) . '%' : '—'; ?>
     <tr>
       <td><?= td_task($t) ?></td>
-      <td><?= e($t['project']) ?></td>
+      <td><?= e(project_display($t['project'] ?? '')) ?></td>
       <td class="nowrap"><?= e(ba_label($t['ba_email'], $t['ba_name'])) ?></td>
       <td><?= e($t['assignee']) ?></td>
       <td class="nowrap"><?= e(fmt_date($t['first_d1']) ?: '—') ?> → <?= e(fmt_date($cur) ?: '—') ?></td>

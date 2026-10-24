@@ -346,6 +346,6 @@
 
   fetch(holder.dataset.endpoint + location.search, { credentials: 'same-origin' })
     .then((r) => { if (r.status === 401) { location.href = base + '/login.php'; throw new Error('auth'); } return r.json(); })
-    .then((j) => { data = j; build(); window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', build); })
+    .then((j) => { data = j; build(); window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', build); window.addEventListener('themechange', build); })
     .catch((x) => { if (x.message !== 'auth') holder.prepend(h('p', { class: 'err', text: 'Could not load chart data.' })); });
 })();

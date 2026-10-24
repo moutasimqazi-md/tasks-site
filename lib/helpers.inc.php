@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/people.inc.php';
+require_once __DIR__ . '/projects.inc.php';
 
 function e(?string $s): string
 {
@@ -235,14 +236,4 @@ function assignee_list(): array
     }
     uasort($names, 'strcasecmp');
     return array_values($names);
-}
-
-function project_list(): array
-{
-    $rows = db_all("SELECT project FROM (
-                      SELECT DISTINCT project FROM tasks WHERE project IS NOT NULL AND project <> ''
-                      UNION
-                      SELECT DISTINCT project FROM events WHERE project IS NOT NULL AND project <> ''
-                    ) p ORDER BY project");
-    return array_column($rows, 'project');
 }

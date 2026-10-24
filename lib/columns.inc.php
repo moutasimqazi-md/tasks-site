@@ -58,7 +58,7 @@ function event_columns(string $page): array
             'tip' => 'The date the inflation happened. Pre-tracking rows show the original deadline that was extended (the real change date was before tracking began).',
             'html' => 'when_cell', 'csv' => fn($r) => fmt_event_when($r)],
         'project'  => ['label' => 'Project', 'sort' => 'e.project',
-            'html' => fn($r) => e($r['project'] ?? ''), 'csv' => fn($r) => (string)$r['project']],
+            'html' => fn($r) => e(project_display($r['project'] ?? '')), 'csv' => fn($r) => project_display($r['project'] ?? '')],
         'board'    => ['label' => 'Board', 'sort' => 'e.board',
             'html' => fn($r) => e($r['board'] ?? ''), 'csv' => fn($r) => (string)$r['board']],
         'task'     => ['label' => 'Task', 'sort' => 'e.title', 'tip' => $tipTask, 'class' => 'wide',
