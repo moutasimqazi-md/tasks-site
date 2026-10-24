@@ -22,7 +22,7 @@ function render_header(string $title, string $active, ?array $f = null, string $
     }
     $syncTxt = $sync ? fmt_ist((string)$sync, 'j M Y, H:i') . ' IST' : 'never';
     $qs = $f ? '?' . http_build_query($f['_qs']) : '';
-    $nav = ['index.php' => ['overview', 'Overview'], 'tasks.php' => ['tasks', 'Tasks'], 'inflations.php' => ['inflations', 'Date changes'],
+    $nav = ['index.php' => ['overview', 'Overview'], 'tasks.php' => ['tasks', 'Tasks'], 'inflations.php' => ['inflations', 'Date changes'], 'estimates.php' => ['estimates', 'Estimates'],
         'deletions.php' => ['deletions', 'Deleted'], 'scorecard.php' => ['scorecard', 'People'],
         'graphs.php' => ['graphs', 'Charts']];
     ?><!doctype html>
@@ -98,10 +98,13 @@ function render_filter_bar(array $f, array $opts = []): void
     $period = ($opts['period'] ?? true) !== false;
     $active = count($f['ba']) + count($f['project']) + count($f['assignee']) + count($f['types']) + ($f['source'] !== '' ? 1 : 0) + ($f['restores'] ? 1 : 0);
     $self = basename($_SERVER['SCRIPT_NAME']);
-    $keep = array_intersect_key($_GET, array_flip(['view', 'show']));
+    $keep = array_intersect_key($_GET, array_flip(['view', 'show', 'level', 'dept']));
+    $only = $opts['only'] ?? null;
+    $has = fn(string $k) => $only === null || in_array($k, $only, true);
     ?>
 <form class="filters" method="get" action="<?= e($self) ?>">
   <input type="hidden" name="range" value="<?= e($f['preset']) ?>" data-role="range">
+  <?php foreach (array_intersect_key($_GET, array_flip(['level', 'dept'])) as $hk => $hv): if (is_string($hv)): ?><input type="hidden" name="<?= e($hk) ?>" value="<?= e($hv) ?>"><?php endif; endforeach; ?>
   <?php foreach (($opts['hidden'] ?? []) as $hk => $hv): ?><input type="hidden" name="<?= e($hk) ?>" value="<?= e((string)$hv) ?>"><?php endforeach; ?>
   <div class="filter-top">
     <?php if ($period): ?>
@@ -125,19 +128,19 @@ function render_filter_bar(array $f, array $opts = []): void
     <details class="fpanel">
       <summary class="btn">Filters<?= $active ? ' <span class="n">' . $active . '</span>' : '' ?></summary>
       <div class="fpanel-body">
-        <?php ms_dropdown('ba', 'BA', $baOpts, $f['ba']); ?>
-        <?php $pr = project_list(); ms_dropdown('project', 'Project', array_combine($pr, $pr) ?: [], $f['project']); ?>
-        <?php $as = assignee_list(); ms_dropdown('assignee', 'Assignee', array_combine($as, $as) ?: [], $f['assignee']); ?>
+        <?php if ($has('ba')) ms_dropdown('ba', 'BA', $baOpts, $f['ba']); ?>
+        <?php if ($has('project')) { $pr = project_list(); ms_dropdown('project', 'Project', array_combine($pr, $pr) ?: [], $f['project']); } ?>
+        <?php if ($has('assignee')) { $as = assignee_list(); ms_dropdown('assignee', 'Assignee', array_combine($as, $as) ?: [], $f['assignee']); } ?>
         <?php if (!empty($opts['types'])):
           $tys = array_column(db_all("SELECT DISTINCT event_type FROM events WHERE category = 'inflation' ORDER BY event_type"), 'event_type');
           $to = []; foreach ($tys as $t) $to[$t] = event_label($t);
           ms_dropdown('types', 'Change type', $to, $f['types']);
         endif; ?>
-        <select name="source" aria-label="Source" class="src">
+        <?php if ($has('source')): ?><select name="source" aria-label="Source" class="src">
           <option value="">Source: All</option>
           <option value="sheet"<?= $f['source'] === 'sheet' ? ' selected' : '' ?>>Source: Sheets</option>
           <option value="notion"<?= $f['source'] === 'notion' ? ' selected' : '' ?>>Source: Notion</option>
-        </select>
+        </select><?php endif; ?>
         <?php if (!empty($opts['restores'])): ?>
           <label class="chk"><input type="checkbox" name="restores" value="1"<?= $f['restores'] ? ' checked' : '' ?>> Show restores</label>
         <?php endif; ?>

@@ -64,7 +64,7 @@ function event_columns(string $page): array
         'task'     => ['label' => 'Task', 'sort' => 'e.title', 'tip' => $tipTask, 'class' => 'wide',
             'html' => 'td_task', 'csv' => fn($r) => (string)$r['title']],
         'assignee' => ['label' => 'Assignee', 'sort' => 'e.assignee',
-            'html' => fn($r) => e($r['assignee'] ?? ''), 'csv' => fn($r) => (string)$r['assignee']],
+            'html' => fn($r) => e(assignee_display($r['assignee'] ?? '')), 'csv' => fn($r) => assignee_display($r['assignee'] ?? '')],
         'ba'       => ['label' => 'BA', 'sort' => 'COALESCE(NULLIF(e.ba_name, \'\'), e.ba_email)', 'class' => 'nowrap',
             'html' => 'ba_cell', 'csv' => fn($r) => ba_label($r['ba_email'], $r['ba_name'])],
         'moved'    => ['extra' => true, 'label' => 'Times moved', 'sort' => 'e.times_moved', 'class' => 'num',

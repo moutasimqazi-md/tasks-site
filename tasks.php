@@ -5,7 +5,7 @@ require __DIR__ . '/lib/common.inc.php';
 
 $f = load_filters();
 $view = in_array($_GET['view'] ?? '', ['project', 'assignee', 'tasks'], true) ? $_GET['view'] : 'project';
-$show = in_array($_GET['show'] ?? '', ['open', 'all', 'extended', 'overdue'], true) ? $_GET['show'] : 'open';
+$show = in_array($_GET['show'] ?? '', ['open', 'all', 'extended', 'overdue', 'stale'], true) ? $_GET['show'] : 'open';
 $todayIst = (new DateTimeImmutable('today', tz_ist()))->format('Y-m-d');
 
 // ---- WHERE: board filters + the "show" pill + search ----
@@ -13,7 +13,8 @@ $todayIst = (new DateTimeImmutable('today', tz_ist()))->format('Y-m-d');
 $dl = "COALESCE(NULLIF(t.d2, ''), NULLIF(t.d1, ''))";
 if ($show === 'open')     $w .= ' AND t.is_done = 0';
 if ($show === 'extended') $w .= ' AND (t.times_moved > 0 OR t.total_added > 0)';
-if ($show === 'overdue')  { $w .= " AND t.is_done = 0 AND $dl IS NOT NULL AND $dl < ?"; $p[] = $todayIst; }
+if ($show === 'overdue') { $w .= ' AND ' . overdue_clause($dl, 't', $todayIst, $p); }
+if ($show === 'stale')   { $w .= ' AND ' . stale_clause($dl, 't', $todayIst, $p); }
 if ($f['q'] !== '') {
     $w .= ' AND (t.title LIKE ? OR t.assignee LIKE ?)';
     $l = like_escape($f['q']); $p[] = $l; $p[] = $l;
@@ -33,7 +34,7 @@ render_header('Tasks', 'tasks', $f, 'What is on the boards right now — by proj
     <?php endforeach; ?>
   </div>
   <div class="pills" role="group" aria-label="Which tasks">
-    <?php foreach (['open' => 'Open', 'overdue' => 'Overdue', 'extended' => 'Extended', 'all' => 'All (incl. done)'] as $v => $t): ?>
+    <?php foreach (['open' => 'Open', 'overdue' => 'Overdue', 'stale' => 'Stale ' . STALE_DAYS . '+ d', 'extended' => 'Extended', 'all' => 'All (incl. done)'] as $v => $t): ?>
       <a class="pill<?= $show === $v ? ' active' : '' ?>" href="<?= e(view_url(['show' => $v])) ?>"><?= $t ?></a>
     <?php endforeach; ?>
   </div>
@@ -65,7 +66,8 @@ if ($view === 'tasks') {
     echo '</tr></thead><tbody>';
     if (!$rows) echo '<tr><td colspan="8" class="empty-cell">No tasks match these filters.</td></tr>';
     foreach ($rows as $t) {
-        $overdue = !(int)$t['is_done'] && $t['dl'] && $t['dl'] < $todayIst;
+        $timing = task_timing($t, $todayIst);
+        $overdue = $timing === 'overdue';
         $url = safe_url($t['link'] ?? '');
         $title = (string)$t['title'] !== '' ? (string)$t['title'] : '(untitled)';
         $tHtml = $url !== '' ? '<a href="' . e($url) . '" target="_blank" rel="noopener noreferrer">' . e($title) . '</a>' : e($title);
@@ -74,11 +76,11 @@ if ($view === 'tasks') {
         echo '<tr>'
             . '<td class="wide"><span class="clip" title="' . e($title) . '">' . $tHtml . '</span></td>'
             . '<td>' . e($t['project']) . '</td>'
-            . '<td>' . e($t['assignee']) . '</td>'
+            . '<td>' . e(assignee_display($t['assignee'] ?? '')) . '</td>'
             . '<td class="nowrap">' . e(ba_label($t['ba_email'], $t['ba_name'])) . '</td>'
             . '<td>' . ((int)$t['is_done'] ? '<span class="badge done">' . e($t['status']) . '</span>' : e($t['status'])) . '</td>'
-            . '<td class="nowrap"><span class="deadline' . ($overdue ? ' overdue' : '') . '" title="' . e($dTip . ($overdue ? ' — overdue' : '')) . '">'
-                . ($t['dl'] ? e(fmt_date($t['dl'])) : '<span class="muted">—</span>') . '</span>' . ($overdue ? ' ' . badge('Overdue', 'red') : '') . '</td>'
+            . '<td class="nowrap"><span class="deadline' . ($overdue ? ' overdue' : '') . '" title="' . e($dTip . ($timing === 'overdue' ? ' — overdue' : ($timing === 'stale' ? ' — stale: more than ' . STALE_DAYS . ' days past, probably never closed' : ($timing === 'waiting' ? ' — past the date but work is finished or parked (' . $t['status'] . ')' : '')))) . '">'
+                . ($t['dl'] ? e(fmt_date($t['dl'])) : '<span class="muted">—</span>') . '</span>' . ($timing === 'overdue' ? ' ' . badge('Overdue', 'red') : ($timing === 'stale' ? ' ' . badge('Stale', 'gray') : '')) . '</td>'
             . '<td class="num">' . ((int)$t['total_added'] > 0 ? '+' . (int)$t['total_added'] : '<span class="muted">0</span>') . '</td>'
             . '<td class="num">' . (int)$t['times_moved'] . '</td>'
             . '</tr>';
@@ -90,23 +92,25 @@ if ($view === 'tasks') {
 }
 
 // ---- grouped views (aggregate in PHP: a few thousand rows at most) ----
-$all = db_all("SELECT t.project, t.assignee, t.ba_email, t.ba_name, t.is_done, t.times_moved, t.total_added, $dl AS dl
+$all = db_all("SELECT t.project, t.assignee, t.status, t.ba_email, t.ba_name, t.is_done, t.times_moved, t.total_added, $dl AS dl
                FROM tasks t WHERE $w", $p);
 $groups = [];
 foreach ($all as $t) {
     if ($view === 'project') {
         $names = [trim((string)$t['project']) !== '' ? (string)$t['project'] : '(no project)'];
     } else {
-        $names = array_filter(array_map('trim', preg_split('/\s*,\s*/', (string)$t['assignee'])), fn($n) => $n !== '');
+        $names = person_names((string)$t['assignee']);
         if (!$names) $names = ['(unassigned)'];
     }
     foreach ($names as $n) {
         $g = &$groups[$n];
-        $g ??= ['name' => $n, 'tasks' => 0, 'open' => 0, 'overdue' => 0, 'extended' => 0, 'slip' => 0, 'who' => []];
+        $g ??= ['name' => $n, 'tasks' => 0, 'open' => 0, 'overdue' => 0, 'stale' => 0, 'extended' => 0, 'slip' => 0, 'who' => []];
         $g['tasks']++;
         if (!(int)$t['is_done']) {
             $g['open']++;
-            if ($t['dl'] && $t['dl'] < $todayIst) $g['overdue']++;
+            $tm = task_timing($t, $todayIst);
+            if ($tm === 'overdue') $g['overdue']++;
+            if ($tm === 'stale') $g['stale']++;
         }
         if ((int)$t['times_moved'] > 0 || (int)$t['total_added'] > 0) $g['extended']++;
         $g['slip'] += (int)$t['total_added'];
@@ -116,7 +120,7 @@ foreach ($all as $t) {
     }
 }
 $gs = $_GET['sort'] ?? 'open';
-if (!in_array($gs, ['name', 'tasks', 'open', 'overdue', 'extended', 'slip'], true)) $gs = 'open';
+if (!in_array($gs, ['name', 'tasks', 'open', 'overdue', 'stale', 'extended', 'slip'], true)) $gs = 'open';
 $gd = (($_GET['dir'] ?? ($gs === 'name' ? 'asc' : 'desc')) === 'asc') ? 'asc' : 'desc';
 $groups = array_values($groups);
 usort($groups, function ($a, $b) use ($gs, $gd) {
@@ -126,8 +130,8 @@ usort($groups, function ($a, $b) use ($gs, $gd) {
 $unit = $view === 'project' ? 'projects' : 'people';
 echo '<p class="count-line"><strong>' . number_format(count($groups)) . '</strong> ' . $unit . ' · <strong>' . number_format(count($all)) . '</strong> tasks. Click a name to see its tasks.</p>';
 $heads = ['name' => ($view === 'project' ? 'Project' : 'Assignee'), 'who' => ($view === 'project' ? 'BA' : 'Projects'),
-          'tasks' => 'Tasks', 'open' => 'Open', 'overdue' => 'Overdue', 'extended' => 'Extended', 'slip' => 'Total slip (days)'];
-$tips = ['overdue' => 'Open tasks whose current deadline (D2, else D1) is before today.', 'extended' => 'Tasks whose deadline has moved at least once.',
+          'tasks' => 'Tasks', 'open' => 'Open', 'overdue' => 'Overdue', 'stale' => 'Stale', 'extended' => 'Extended', 'slip' => 'Total slip (days)'];
+$tips = ['overdue' => 'Tasks still being worked on whose deadline passed in the last ' . STALE_DAYS . ' days. Work waiting on review or parked is not counted.', 'stale' => 'Open tasks more than ' . STALE_DAYS . ' days past their deadline: usually tickets nobody closed.', 'extended' => 'Tasks whose deadline has moved at least once.',
          'slip' => 'Working days added between the first original deadline and the current one.'];
 echo '<div class="table-wrap"><table class="grid"><thead><tr>';
 foreach ($heads as $k => $label) {
@@ -137,7 +141,7 @@ foreach ($heads as $k => $label) {
     echo '<th class="' . ($k === 'name' ? '' : 'num') . '"><a class="sort" href="' . e(self_url(['sort' => $k, 'dir' => $next])) . '">' . e($label) . $arrow . '</a>' . (isset($tips[$k]) ? info($tips[$k]) : '') . '</th>';
 }
 echo '</tr></thead><tbody>';
-if (!$groups) echo '<tr><td colspan="7" class="empty-cell">No tasks match these filters.</td></tr>';
+if (!$groups) echo '<tr><td colspan="8" class="empty-cell">No tasks match these filters.</td></tr>';
 foreach ($groups as $g) {
     arsort($g['who']);
     $who = array_slice(array_keys($g['who']), 0, 3);
@@ -148,7 +152,7 @@ foreach ($groups as $g) {
         . '<td class="wide"><span class="clip" title="' . e(implode(', ', array_keys($g['who']))) . '">' . e($whoTxt) . '</span></td>'
         . '<td class="num">' . number_format($g['tasks']) . '</td><td class="num">' . number_format($g['open']) . '</td>'
         . '<td class="num' . ($g['overdue'] > 0 ? ' warn' : '') . '">' . number_format($g['overdue']) . '</td>'
-        . '<td class="num">' . number_format($g['extended']) . '</td><td class="num">' . number_format($g['slip']) . '</td></tr>';
+        . '<td class="num">' . number_format($g['stale']) . '</td><td class="num">' . number_format($g['extended']) . '</td><td class="num">' . number_format($g['slip']) . '</td></tr>';
 }
 echo '</tbody></table></div>';
 render_footer();

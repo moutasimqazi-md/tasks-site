@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/people.inc.php';
 
 function e(?string $s): string
 {
@@ -225,15 +226,12 @@ function ba_directory(): array
     return $dir = $out;
 }
 
-/** Distinct individual assignee names (the column holds "A, B" lists). */
+/** One entry per real person (typos and first-name variants merged, see people.inc.php). */
 function assignee_list(): array
 {
     $names = [];
     foreach (db_all("SELECT DISTINCT assignee FROM tasks WHERE assignee IS NOT NULL AND assignee <> ''") as $r) {
-        foreach (preg_split('/\s*,\s*/', (string)$r['assignee']) as $n) {
-            $n = trim($n);
-            if ($n !== '') $names[mb_strtolower($n)] = $n;
-        }
+        foreach (person_names((string)$r['assignee']) as $n) $names[mb_strtolower($n)] = $n;
     }
     uasort($names, 'strcasecmp');
     return array_values($names);

@@ -260,3 +260,6 @@ dl.kv { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px; margin: 
   table.grid:not(.score) td { background: none !important; }
   .kpis { grid-template-columns: 1fr 1fr; } .kpi-value { font-size: 28px; } .summary { font-size: 16px; }
 }
+
+.kpis.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+code { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12px; }

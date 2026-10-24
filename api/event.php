@@ -28,7 +28,7 @@ function event_view(array $r): array
         'title' => (string)$r['title'],
         'link' => safe_url($r['link'] ?? ''),
         'project' => $r['project'], 'board' => $r['board'], 'source' => $r['source'],
-        'assignee' => $r['assignee'],
+        'assignee' => assignee_display($r['assignee'] ?? ''),
         'ba' => ba_label($r['ba_email'], $r['ba_name']),
         'detected' => fmt_ist($r['detected_at']) . ' IST',
         'when' => fmt_event_when($r + ['ev_at' => $r['ev_at'] ?? $r['detected_at']]) . ' IST',
@@ -68,7 +68,7 @@ if ($t) {
         'Times moved' => $t['times_moved'], 'Total slip (days)' => $t['total_added'],
         'First seen' => fmt_ist($t['first_seen_at']), 'Last seen' => fmt_ist($t['last_seen_at']),
         'Deleted at' => $t['deleted_at'] ? fmt_ist($t['deleted_at']) . ' IST' : '—',
-        'Assignee' => $t['assignee'], 'BA' => ba_label($t['ba_email'], $t['ba_name']),
+        'Assignee' => assignee_display($t['assignee'] ?? ''), 'BA' => ba_label($t['ba_email'], $t['ba_name']),
     ];
 }
 

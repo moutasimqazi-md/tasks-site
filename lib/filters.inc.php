@@ -124,13 +124,18 @@ function in_nullable(string $col, array $vals, array &$params): string
     return '(' . implode(' OR ', $parts) . ')';
 }
 
-/** Assignee column holds comma lists like "Lakshmi, Saritha": match each chosen name as a substring. */
+/**
+ * Assignee column holds "A, B" lists with hand-typed spellings. A chosen (canonical) person matches every
+ * known spelling, as a whole list element, so "Abdul" never matches "Abdul Khalik".
+ */
 function assignee_clause(string $col, array $names, array &$params): string
 {
     $parts = [];
     foreach ($names as $n) {
-        $parts[] = "$col LIKE ?";
-        $params[] = like_escape($n);
+        foreach (person_variants($n) as $v) {
+            $parts[] = "CONCAT(',', REPLACE($col, ', ', ','), ',') LIKE ?";
+            $params[] = '%,' . addcslashes($v, '%_\\') . ',%';
+        }
     }
     return '(' . implode(' OR ', $parts) . ')';
 }

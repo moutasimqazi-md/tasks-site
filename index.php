@@ -14,7 +14,10 @@ $qs = fn(array $extra = []) => http_build_query($f['_qs'] + $extra);
 $noReason = (int)db_val("SELECT COUNT(*) FROM events e WHERE $ew AND e.event_type IN (" . INFL_DAY_TYPES . ") AND (e.reason IS NULL OR TRIM(e.reason) = '')", $ep);
 [$tw, $tp] = tasks_where($f);
 $dl = "COALESCE(NULLIF(t.d2, ''), NULLIF(t.d1, ''))";
-$overdueOpen = (int)db_val("SELECT COUNT(*) FROM tasks t WHERE $tw AND t.is_done = 0 AND $dl IS NOT NULL AND $dl < ?", array_merge($tp, [$todayIst]));
+$op = $tp; $oc = overdue_clause($dl, 't', $todayIst, $op);
+$overdueOpen = (int)db_val("SELECT COUNT(*) FROM tasks t WHERE $tw AND $oc", $op);
+$sp = $tp; $sc = stale_clause($dl, 't', $todayIst, $sp);
+$staleOpen = (int)db_val("SELECT COUNT(*) FROM tasks t WHERE $tw AND $sc", $sp);
 $snap = db_row("SELECT COUNT(*) AS tasks, COALESCE(SUM(t.is_done = 0), 0) AS open_t,
                 COALESCE(SUM(t.times_moved > 0 OR t.total_added > 0), 0) AS ext, COALESCE(SUM(t.total_added), 0) AS days
                 FROM tasks t WHERE $tw", $tp);
@@ -86,7 +89,8 @@ render_filter_bar($f);
     <h3>Needs attention</h3>
     <ul>
       <?php $items = [
-          [$overdueOpen, 'open tasks are overdue', 'tasks.php?' . $qs(['view' => 'tasks', 'show' => 'overdue'])],
+          [$overdueOpen, 'tasks in progress are overdue', 'tasks.php?' . $qs(['view' => 'tasks', 'show' => 'overdue'])],
+          [$staleOpen, 'old tickets are ' . STALE_DAYS . '+ days late (never closed?)', 'tasks.php?' . $qs(['view' => 'tasks', 'show' => 'stale'])],
           [$noReason, 'deadline moves have no reason', 'inflations.php?' . $qs()],
           [$cur['rewritten'], 'original deadlines were rewritten', 'inflations.php?' . $qs(['types' => ['D1_MOVED', 'DEADLINE_REMOVED']])],
       ]; $any = false;
